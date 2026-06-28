@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Tasker Sequencer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: rgba(0, 0, 0, 0.85);
+            color: white;
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: fixed; 
+            top: 0; bottom: 0; left: 0; right: 0;
+            height: 100dvh; 
+            overflow: hidden; 
+        }
+        .container {
+            background-color: #222;
+            padding: 12px 15px; 
+            border-radius: 12px;
+            width: 95%;
+            max-width: 850px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            height: 100%; 
+            box-sizing: border-box;
+        }
+        .controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            width: 100%;
+        }
+        select, button {
+            padding: 10px 4px;
+            background: #444;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            flex: 1 1 0px; 
+            min-width: 0; 
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            background: #444;
+            padding: 0 8px;
+            border-radius: 6px;
+            flex: 1 1 0px;
+            min-width: 0;
+            font-size: 12px;
+        }
+        .slider-container label {
+            margin-right: 6px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .slider-container input {
+            flex: 1;
+            width: 100%;
+        }
+        .drum-pad {
+            background: #d35400;
+            font-weight: bold;
+        }
+        .drum-pad:active {
+            background: #e67e22;
+        }
+        .keyboard {
+            display: flex;
+            position: relative;
+            flex-grow: 1; 
+            min-height: 100px;
+            touch-action: none; 
+            margin-top: 5px;
+        }
+        .key {
+            flex: 1;
+            background: white;
+            color: black;
+            border: 1px solid #ccc;
+            border-radius: 0 0 5px 5px;
+            margin: 0 2px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 10px;
+            font-weight: bold;
+            font-size: 12px;
+            user-select: none;
+            cursor: pointer;
+            height: 100%;
+            box-sizing: border-box;
+        }
+        .key span {
+            pointer-events: none; 
+        }
+        .key-active { background: #ddd !important; }
+        .key.black {
+            background: #111;
+            color: white;
+            position: absolute;
+            height: 62%; 
+            width: 4.5%; 
+            top: 0;
+            z-index: 10;
+            border-radius: 0 0 4px 4px;
+        }
+        .key.black.key-active { background: #333 !important; }
+        .highlight { background-color: #ff4c4c !important; color: white !important; }
+        .active-transport { background-color: #4caf50 !important; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="controls">
+        <select id="instrumentSelect">
+            <option value="sine">Flute</option>
+            <option value="sawtooth">Synth</option>
+            <option value="square">8-Bit</option>
+            <option value="triangle">Bass</option>
+            <option value="guitar">Metal Guitar</option>
+        </select>
+        <select id="beatSelect">
+            <option value="four">4/4 Beat</option>
+            <option value="eighth">8th Beat</option>
+        </select>
+        <select id="barsSelect">
+            <option value="1">1 Bar (2s)</option>
+            <option value="2">2 Bars (4s)</option>
+            <option value="4">4 Bars (8s)</option>
+            <option value="8">8 Bars (16s)</option>
+        </select>
+        <div class="slider-container">
+            <label for="drumVolume">Drums</label>
+            <input type="range" id="drumVolume" min="0" max="1" step="0.05" value="0.7">
+        </div>
+    </div>
+    
+    <div class="controls">
+        <button id="toggleTransport" onclick="toggleTransport()">Play</button>
+        <button id="toggleRecord" onclick="toggleRecord()">Record: Off</button>
+        <button id="clearLoop" onclick="clearLoop()">Clear Loop</button>
+        <button id="saveAudio" onclick="saveAudio()">Save Loop</button>
+    </div>
+
+    <div class="controls">
+        <button class="drum-pad" onpointerdown="playManualDrum('kick')">Kick</button>
+        <button class="drum-pad" onpointerdown="playManualDrum('snare')">Snare</button>
+        <button class="drum-pad" onpointerdown="playManualDrum('tomHigh')">Hi Tom</button>
+        <button class="drum-pad" onpointerdown="playManualDrum('tomLow')">Lo Tom</button>
+        <button class="drum-pad" onpointerdown="playManualDrum('hihat')">Hi-Hat</button>
+    </div>
+
+    <div class="keyboard" id="keyboardArea">
+        <div class="key" data-freq="261.63"><span>C4</span></div>
+        <div class="key black" style="left: 4.41%;" data-freq="277.18"><span>C#</span></div>
+        <div class="key" data-freq="293.66"><span>D4</span></div>
+        <div class="key black" style="left: 11.08%;" data-freq="311.13"><span>D#</span></div>
+        <div class="key" data-freq="329.63"><span>E4</span></div>
+        <div class="key" data-freq="349.23"><span>F4</span></div>
+        <div class="key black" style="left: 24.41%;" data-freq="369.99"><span>F#</span></div>
+        <div class="key" data-freq="392.00"><span>G4</span></div>
+        <div class="key black" style="left: 31.08%;" data-freq="415.30"><span>G#</span></div>
+        <div class="key" data-freq="440.00"><span>A4</span></div>
+        <div class="key black" style="left: 37.75%;" data-freq="466.16"><span>A#</span></div>
+        <div class="key" data-freq="493.88"><span>B4</span></div>
+
+        <div class="key" data-freq="523.25"><span>C5</span></div>
+        <div class="key black" style="left: 51.08%;" data-freq="554.37"><span>C#</span></div>
+        <div class="key" data-freq="587.33"><span>D5</span></div>
+        <div class="key black" style="left: 57.75%;" data-freq="622.25"><span>D#</span></div>
+        <div class="key" data-freq="659.25"><span>E5</span></div>
+        <div class="key" data-freq="698.46"><span>F5</span></div>
+        <div class="key black" style="left: 71.08%;" data-freq="739.99"><span>F#</span></div>
+        <div class="key" data-freq="783.99"><span>G5</span></div>
+        <div class="key black" style="left: 77.75%;" data-freq="830.61"><span>G#</span></div>
+        <div class="key" data-freq="880.00"><span>A5</span></div>
+        <div class="key black" style="left: 84.41%;" data-freq="932.33"><span>A#</span></div>
+        <div class="key" data-freq="987.77"><span>B5</span></div>
+
+        <div class="key" data-freq="1046.50"><span>C6</span></div>
+    </div>
+</div>
+
+<script>
+    let audioCtx, dest, mediaRecorder;
+    let chunks = [];
+    let isPlaying = false;
+    let isRecording = false;
+    let loopDurationMs = 2000; 
+    let loopStartTime = 0;
+    let cycleInterval;
+    let recordedNotes = [];
+    let activeNotes = {}; 
+    let distortionCurve = null;
+
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            dest = audioCtx.createMediaStreamDestination();
+            mediaRecorder = new MediaRecorder(dest.stream);
+            mediaRecorder.ondataavailable = evt => chunks.push(evt.data);
+            mediaRecorder.onstop = () => {
+                let blob = new Blob(chunks, { type: 'audio/webm' });
+                let url = URL.createObjectURL(blob);
+                let a = document.createElement('a');
+                a.href = url;
+                a.download = 'tasker_loop.webm';
+                a.click();
+            };
+        }
+    }
+
+    function getDistortionCurve() {
+        if (distortionCurve) return distortionCurve;
+        const k = 400, n_samples = 44100, deg = Math.PI / 180;
+        distortionCurve = new Float32Array(n_samples);
+        for (let i = 0; i < n_samples; ++i ) {
+            let x = i * 2 / n_samples - 1;
+            distortionCurve[i] = ( 3 + k ) * x * 20 * deg / ( Math.PI + k * Math.abs(x) );
+        }
+        return distortionCurve;
+    }
+
+    // Drum Engine 
+    function playManualDrum(type, startTime) {
+        initAudio();
+        const now = startTime || audioCtx.currentTime;
+        const vol = parseFloat(document.getElementById('drumVolume').value);
+        const gain = audioCtx.createGain();
+        
+        gain.connect(audioCtx.destination);
+        if (dest) gain.connect(dest);
+
+        if (type === 'kick') {
+            const osc = audioCtx.createOscillator();
+            osc.frequency.setValueAtTime(150, now);
+            osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.5);
+            gain.gain.setValueAtTime(1 * vol, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+            osc.connect(gain);
+            osc.start(now);
+            osc.stop(now + 0.5);
+        } else if (type === 'snare') {
+            const osc = audioCtx.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(250, now);
+            const oscGain = audioCtx.createGain();
+            oscGain.gain.setValueAtTime(1 * vol, now);
+            oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+            osc.connect(oscGain);
+            oscGain.connect(gain);
+
+            const noiseSize = audioCtx.sampleRate * 0.2;
+            const noiseBuffer = audioCtx.createBuffer(1, noiseSize, audioCtx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < noiseSize; i++) output[i] = Math.random() * 2 - 1;
+            const noiseSource = audioCtx.createBufferSource();
+            noiseSource.buffer = noiseBuffer;
+            const noiseFilter = audioCtx.createBiquadFilter();
+            noiseFilter.type = 'highpass';
+            noiseFilter.frequency.value = 1000;
+            const noiseGain = audioCtx.createGain();
+            noiseGain.gain.setValueAtTime(1 * vol, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+            noiseSource.connect(noiseFilter);
+            noiseFilter.connect(noiseGain);
+            noiseGain.connect(gain);
+
+            osc.start(now);
+            noiseSource.start(now);
+            osc.stop(now + 0.2);
+        } else if (type === 'tomHigh') {
+            const osc = audioCtx.createOscillator();
+            osc.frequency.setValueAtTime(200, now);
+            osc.frequency.exponentialRampToValueAtTime(50, now + 0.3);
+            gain.gain.setValueAtTime(1 * vol, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+            osc.connect(gain);
+            osc.start(now);
+            osc.stop(now + 0.3);
+        } else if (type === 'tomLow') {
+            const osc = audioCtx.createOscillator();
+            osc.frequency.setValueAtTime(100, now);
+            osc.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+            gain.gain.setValueAtTime(1 * vol, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+            osc.connect(gain);
+            osc.start(now);
+            osc.stop(now + 0.3);
+        } else if (type === 'hihat') {
+            const noiseSize = audioCtx.sampleRate * 0.1;
+            const noiseBuffer = audioCtx.createBuffer(1, noiseSize, audioCtx.sampleRate);
+            const output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < noiseSize; i++) output[i] = Math.random() * 2 - 1;
+            const noiseSource = audioCtx.createBufferSource();
+            noiseSource.buffer = noiseBuffer;
+            const noiseFilter = audioCtx.createBiquadFilter();
+            noiseFilter.type = 'highpass';
+            noiseFilter.frequency.value = 7000;
+            gain.gain.setValueAtTime(0.4 * vol, now); 
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+            noiseSource.connect(noiseFilter);
+            noiseFilter.connect(gain);
+            noiseSource.start(now);
+        }
+
+        if (!startTime && isPlaying && isRecording) {
+            let loopDurationSec = loopDurationMs / 1000;
+            let offset = (now - loopStartTime) % loopDurationSec;
+            offset = (offset + loopDurationSec) % loopDurationSec; 
+            recordedNotes.push({ freq: type, inst: 'drum', offset: offset, duration: 0.2 });
+        }
+    }
+
+    // Playback Engine for Recorded Loop
+    function triggerNote(frequency, type, startTime, duration) {
+        if (type === 'drum') {
+            playManualDrum(frequency, startTime);
+            return;
+        }
+
+        const gainNode = audioCtx.createGain();
+        let oscList = [];
+
+        if (type === 'guitar') {
+            // Layering oscillators for thickness
+            const osc1 = audioCtx.createOscillator();
+            osc1.type = 'sawtooth';
+            osc1.frequency.setValueAtTime(frequency, startTime);
+            osc1.detune.setValueAtTime(-5, startTime);
+
+            const osc2 = audioCtx.createOscillator();
+            osc2.type = 'square';
+            osc2.frequency.setValueAtTime(frequency, startTime);
+            osc2.detune.setValueAtTime(5, startTime);
+
+            // Adding a perfect 5th to generate a Power Chord
+            const osc3 = audioCtx.createOscillator();
+            osc3.type = 'sawtooth';
+            osc3.frequency.setValueAtTime(frequency * 1.4983, startTime); 
+
+            // Pre-gain drive to aggressively muddy the signal
+            const drive = audioCtx.createGain();
+            drive.gain.value = 15;
+
+            const distortion = audioCtx.createWaveShaper();
+            distortion.curve = getDistortionCurve();
+            distortion.oversample = '4x';
+            
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 3500;
+
+            osc1.connect(drive);
+            osc2.connect(drive);
+            osc3.connect(drive);
+            drive.connect(distortion);
+            distortion.connect(filter);
+            filter.connect(gainNode);
+
+            osc1.start(startTime);
+            osc2.start(startTime);
+            osc3.start(startTime);
+            oscList = [osc1, osc2, osc3];
+        } else {
+            const oscillator = audioCtx.createOscillator();
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(frequency, startTime);
+            oscillator.connect(gainNode);
+            oscillator.start(startTime);
+            oscList = [oscillator];
+        }
+
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(1, startTime + 0.02);
+        gainNode.gain.setValueAtTime(1, startTime + duration);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration + 0.5);
+
+        gainNode.connect(audioCtx.destination); 
+        if (dest) gainNode.connect(dest);       
+
+        oscList.forEach(osc => osc.stop(startTime + duration + 0.6));
+    }
+
+    // Metronome/Downbeat Engine
+    function playDrum(startTime, isDownbeat) {
+        if (!startTime) startTime = audioCtx.currentTime;
+        const vol = parseFloat(document.getElementById('drumVolume').value);
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        const startFreq = isDownbeat ? 300 : 150;
+        
+        osc.frequency.setValueAtTime(startFreq, startTime);
+        osc.frequency.exponentialRampToValueAtTime(0.01, startTime + 0.1);
+        
+        gain.gain.setValueAtTime((isDownbeat ? 1 : 0.6) * vol, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.1);
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        if (dest) gain.connect(dest);
+        
+        osc.start(startTime);
+        osc.stop(startTime + 0.15);
+    }
+
+    function startNote(frequency) {
+        initAudio();
+        if (activeNotes[frequency]) return;
+
+        const type = document.getElementById("instrumentSelect").value;
+        const now = audioCtx.currentTime;
+        const gainNode = audioCtx.createGain();
+        let oscList = [];
+
+        if (type === 'guitar') {
+            const osc1 = audioCtx.createOscillator();
+            osc1.type = 'sawtooth';
+            osc1.frequency.setValueAtTime(frequency, now);
+            osc1.detune.setValueAtTime(-5, now);
+
+            const osc2 = audioCtx.createOscillator();
+            osc2.type = 'square';
+            osc2.frequency.setValueAtTime(frequency, now);
+            osc2.detune.setValueAtTime(5, now);
+
+            const osc3 = audioCtx.createOscillator();
+            osc3.type = 'sawtooth';
+            osc3.frequency.setValueAtTime(frequency * 1.4983, now); 
+
+            const drive = audioCtx.createGain();
+            drive.gain.value = 15;
+
+            const distortion = audioCtx.createWaveShaper();
+            distortion.curve = getDistortionCurve();
+            distortion.oversample = '4x';
+            
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 3500;
+            
+            osc1.connect(drive);
+            osc2.connect(drive);
+            osc3.connect(drive);
+            drive.connect(distortion);
+            distortion.connect(filter);
+            filter.connect(gainNode);
+
+            osc1.start(now);
+            osc2.start(now);
+            osc3.start(now);
+            oscList = [osc1, osc2, osc3];
+        } else {
+            const oscillator = audioCtx.createOscillator();
+            oscillator.type = type;
+            oscillator.frequency.setValueAtTime(frequency, now);
+            oscillator.connect(gainNode);
+            oscillator.start(now);
+            oscList = [oscillator];
+        }
+
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(1, now + 0.02);
+
+        gainNode.connect(audioCtx.destination);
+        if (dest) gainNode.connect(dest);
+
+        activeNotes[frequency] = { oscs: oscList, gain: gainNode, type: type, startTime: now };
+    }
+
+    function stopNote(frequency) {
+        if (!activeNotes[frequency]) return;
+
+        const note = activeNotes[frequency];
+        const now = audioCtx.currentTime;
+
+        note.gain.gain.setValueAtTime(note.gain.gain.value, now);
+        note.gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+        
+        // Stop all oscillators attached to this key
+        note.oscs.forEach(osc => osc.stop(now + 0.6));
+
+        if (isPlaying && isRecording) {
+            let loopDurationSec = loopDurationMs / 1000;
+            let offset = (note.startTime - loopStartTime) % loopDurationSec;
+            offset = (offset + loopDurationSec) % loopDurationSec; 
+            let duration = now - note.startTime;
+            
+            recordedNotes.push({ freq: frequency, inst: note.type, offset: offset, duration: duration });
+        }
+
+        delete activeNotes[frequency];
+    }
+
+    // --- Glissando (Sliding) Keyboard Multi-Touch Tracking ---
+    const keyboardArea = document.getElementById('keyboardArea');
+    const activeTouches = {};
+
+    function getElementKey(e) {
+        const elem = document.elementFromPoint(e.clientX, e.clientY);
+        if (elem && elem.classList.contains('key') && elem.hasAttribute('data-freq')) {
+            return { elem, freq: parseFloat(elem.getAttribute('data-freq')) };
+        }
+        return null;
+    }
+
+    keyboardArea.addEventListener('pointerdown', (e) => {
+        initAudio();
+        const hit = getElementKey(e);
+        if (hit) {
+            activeTouches[e.pointerId] = hit.freq;
+            startNote(hit.freq);
+            hit.elem.classList.add('key-active');
+        }
+    });
+
+    keyboardArea.addEventListener('pointermove', (e) => {
+        if (!activeTouches.hasOwnProperty(e.pointerId)) return;
+        
+        const hit = getElementKey(e);
+        const oldFreq = activeTouches[e.pointerId];
+
+        if (hit) {
+            if (hit.freq !== oldFreq) {
+                stopNote(oldFreq);
+                removeKeyVisuals(oldFreq);
+                activeTouches[e.pointerId] = hit.freq;
+                startNote(hit.freq);
+                hit.elem.classList.add('key-active');
+            }
+        } else {
+            stopNote(oldFreq);
+            removeKeyVisuals(oldFreq);
+            delete activeTouches[e.pointerId];
+        }
+    });
+
+    function handlePointerUp(e) {
+        if (activeTouches.hasOwnProperty(e.pointerId)) {
+            const freq = activeTouches[e.pointerId];
+            stopNote(freq);
+            removeKeyVisuals(freq);
+            delete activeTouches[e.pointerId];
+        }
+    }
+    keyboardArea.addEventListener('pointerup', handlePointerUp);
+    keyboardArea.addEventListener('pointercancel', handlePointerUp);
+
+    function removeKeyVisuals(freq) {
+        document.querySelectorAll('.key').forEach(k => {
+            if (parseFloat(k.getAttribute('data-freq')) === freq) {
+                k.classList.remove('key-active');
+            }
+        });
+    }
+
+    function startCycle() {
+        loopStartTime = audioCtx.currentTime;
+        const type = document.getElementById("beatSelect").value;
+        const tickMs = (type === "four") ? 500 : 250;
+        const numTicks = loopDurationMs / tickMs;
+        
+        for(let i=0; i<numTicks; i++) {
+            playDrum(loopStartTime + (i * (tickMs / 1000)), i === 0);
+        }
+
+        recordedNotes.forEach(n => {
+            triggerNote(n.freq, n.inst, loopStartTime + n.offset, n.duration);
+        });
+    }
+
+    function toggleTransport() {
+        initAudio();
+        const btn = document.getElementById("toggleTransport");
+        const bars = parseInt(document.getElementById("barsSelect").value);
+        loopDurationMs = bars * 2000; 
+
+        if (isPlaying) {
+            clearInterval(cycleInterval);
+            btn.innerText = "Play";
+            btn.classList.remove("active-transport");
+            
+            isRecording = false;
+            document.getElementById("toggleRecord").innerText = "Record: Off";
+            document.getElementById("toggleRecord").classList.remove("highlight");
+            
+            Object.keys(activeNotes).forEach(freq => stopNote(parseFloat(freq)));
+        } else {
+            startCycle(); 
+            cycleInterval = setInterval(startCycle, loopDurationMs);
+            btn.innerText = "Stop";
+            btn.classList.add("active-transport");
+        }
+        isPlaying = !isPlaying;
+    }
+
+    function toggleRecord() {
+        if (!isPlaying) return alert("Please press Play before recording!");
+        isRecording = !isRecording;
+        const btn = document.getElementById("toggleRecord");
+        btn.innerText = isRecording ? "Recording..." : "Record: Off";
+        isRecording ? btn.classList.add("highlight") : btn.classList.remove("highlight");
+    }
+
+    function clearLoop() {
+        recordedNotes = [];
+    }
+
+    function saveAudio() {
+        initAudio();
+        if (recordedNotes.length === 0) return alert("Add some notes to your loop first!");
+        
+        chunks = [];
+        mediaRecorder.start();
+        startCycle();
+        
+        setTimeout(() => {
+            mediaRecorder.stop();
+        }, loopDurationMs + 500); 
+    }
+</script>
+
+</body>
+</html>
